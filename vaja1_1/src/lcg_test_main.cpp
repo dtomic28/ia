@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string>
 
-#include "lcg.hpp"
+#include "lcg.h"
 
 static bool parseU64(const char* text, uint64_t& out) {
     const char* end = text + std::strlen(text);

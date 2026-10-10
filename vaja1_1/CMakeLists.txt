@@ -1,13 +1,21 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(ASSIGNMENT_NAME "vaja01")
+set(ASSIGNMENT_NAME "vaja1_1")
 
 project(${ASSIGNMENT_NAME})
 
 include_directories(${CMAKE_SOURCE_DIR}/${ASSIGNMENT_NAME}/include)
 
+if(MINGW_RUNTIME_DLLS)
+    file(COPY ${MINGW_RUNTIME_DLLS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+endif()
+
 add_executable(${ASSIGNMENT_NAME}_cli src/cli_main.cpp)
 add_executable(${ASSIGNMENT_NAME}_lcg_test src/lcg_test_main.cpp)
+
+# Timings are only meaningful with optimizations, so the benchmark is optimized even in Debug builds
+add_executable(${ASSIGNMENT_NAME}_prime_bench src/prime_bench_main.cpp)
+target_compile_options(${ASSIGNMENT_NAME}_prime_bench PRIVATE -O2)
 
 include(FetchContent)
 

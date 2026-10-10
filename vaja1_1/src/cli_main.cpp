@@ -1,8 +1,6 @@
 #include <iostream>
 
-#include "lcg.hpp"
-
-static LCG SuperDuper{1ull << 32, 69069, 1, 0};
+#include "prime_generators.h"
 
 int main() {
     for (int i = 0; i < 10; i++)
