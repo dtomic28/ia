@@ -5,6 +5,9 @@ set(GLOBAL_PROJECT_NAME "IzbraniAlgoritmi")
 
 project(${GLOBAL_PROJECT_NAME})
 
+# Lets each assignment group its targets with the FOLDER property
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
 # Link the MinGW runtime statically, otherwise a different libstdc++-6.dll on PATH can be loaded at runtime.
 # libwinpthread can't be linked statically with this toolchain, so its DLL is copied next to the executables instead.
 if(MINGW)

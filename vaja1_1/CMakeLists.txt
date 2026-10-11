@@ -61,3 +61,12 @@ target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
 
 add_executable(${ASSIGNMENT_NAME}_gui src/gui_main.cpp)
 target_link_libraries(${ASSIGNMENT_NAME}_gui PRIVATE imgui)
+
+set_target_properties(
+    ${ASSIGNMENT_NAME}_cli
+    ${ASSIGNMENT_NAME}_lcg_test
+    ${ASSIGNMENT_NAME}_prime_bench
+    ${ASSIGNMENT_NAME}_gui
+    imgui
+    PROPERTIES FOLDER ${ASSIGNMENT_NAME}
+)
