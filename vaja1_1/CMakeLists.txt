@@ -12,10 +12,7 @@ endif()
 
 add_executable(${ASSIGNMENT_NAME}_cli src/cli_main.cpp)
 add_executable(${ASSIGNMENT_NAME}_lcg_test src/lcg_test_main.cpp)
-
-# Timings are only meaningful with optimizations, so the benchmark is optimized even in Debug builds
 add_executable(${ASSIGNMENT_NAME}_prime_bench src/prime_bench_main.cpp)
-target_compile_options(${ASSIGNMENT_NAME}_prime_bench PRIVATE -O2)
 
 include(FetchContent)
 
