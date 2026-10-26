@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(ASSIGNMENT_NAME "vaja1_1")
+set(ASSIGNMENT_NAME "vaja1")
 
 project(${ASSIGNMENT_NAME})
 
@@ -13,6 +13,7 @@ endif()
 add_executable(${ASSIGNMENT_NAME}_cli src/cli_main.cpp)
 add_executable(${ASSIGNMENT_NAME}_lcg_test src/lcg_test_main.cpp)
 add_executable(${ASSIGNMENT_NAME}_prime_bench src/prime_bench_main.cpp)
+add_executable(${ASSIGNMENT_NAME}_keygen_bench src/keygen_bench_main.cpp)
 
 include(FetchContent)
 
@@ -20,6 +21,8 @@ set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
+set(NFD_BUILD_TESTS     OFF CACHE BOOL "" FORCE)
+set(NFD_INSTALL         OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
@@ -36,7 +39,13 @@ FetchContent_Declare(implot
     GIT_TAG        v1.0
     GIT_SHALLOW    TRUE
 )
-FetchContent_MakeAvailable(glfw imgui implot)
+# Native "Open file" / "Save file" dialogs, ImGui has none of its own
+FetchContent_Declare(nfd
+    GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
+    GIT_TAG        v1.4.1
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(glfw imgui implot nfd)
 
 find_package(OpenGL REQUIRED)
 
@@ -60,13 +69,15 @@ target_include_directories(imgui PUBLIC
 target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
 
 add_executable(${ASSIGNMENT_NAME}_gui src/gui_main.cpp)
-target_link_libraries(${ASSIGNMENT_NAME}_gui PRIVATE imgui)
+target_link_libraries(${ASSIGNMENT_NAME}_gui PRIVATE imgui nfd)
 
 set_target_properties(
     ${ASSIGNMENT_NAME}_cli
     ${ASSIGNMENT_NAME}_lcg_test
     ${ASSIGNMENT_NAME}_prime_bench
+    ${ASSIGNMENT_NAME}_keygen_bench
     ${ASSIGNMENT_NAME}_gui
     imgui
+    nfd
     PROPERTIES FOLDER ${ASSIGNMENT_NAME}
 )

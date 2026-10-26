@@ -36,4 +36,4 @@ target_link_libraries(boost_multiprecision INTERFACE Boost::config)
 # Linked to every target added after this point, so each assignment's executables get it
 link_libraries(Boost::multiprecision)
 
-add_subdirectory(vaja1_1)
+add_subdirectory(vaja1)

@@ -46,19 +46,37 @@ inline std::optional<cpp_int> modularLinearEquationSolver(const cpp_int& factor,
     return positiveMod(coefFactor * (target / gcd), modulus);
 }
 
+// Which prime generator to use for p and q
+enum class PrimeMethod {
+    naive,
+    millerRabin
+};
+
 struct KeyPair
 {
     Key publicKey;
     Key privateKey;
+
+    // Secret values the keys were made from, kept only so they can be shown and checked
+    cpp_int p;
+    cpp_int q;
+    cpp_int phi;
 };
 
-inline KeyPair generateKeys(std::uint32_t noOfBits)
+inline cpp_int generatePrime(std::uint32_t noOfBits, PrimeMethod method, uint64_t s)
 {
-    auto p  = generatePrimeMillerRabin(noOfBits);
+    return method == PrimeMethod::naive ? generatePrimeNaive(noOfBits) : generatePrimeMillerRabin(noOfBits, s);
+}
+
+// noOfBits must be at least 3, with 2 bits the only odd prime is 3 so p and q can never differ
+inline KeyPair generateKeys(std::uint32_t noOfBits, PrimeMethod method = PrimeMethod::millerRabin,
+                            uint64_t s = defaultMillerRabinRounds)
+{
+    auto p  = generatePrime(noOfBits, method, s);
     cpp_int q;
     do
     {
-        q = generatePrimeMillerRabin(noOfBits);
+        q = generatePrime(noOfBits, method, s);
     } while (q == p);
 
     cpp_int n = p * q;
@@ -77,13 +95,16 @@ inline KeyPair generateKeys(std::uint32_t noOfBits)
 
     const cpp_int d{modularLinearEquationSolver(e, 1, phi).value()};
 
-    return {{e, n}, {d, n}};
+    return {{e, n}, {d, n}, p, q, phi};
 }
 
-inline KeyPair generateAndSaveKeys(std::uint32_t noOfBits)
+inline KeyPair generateAndSaveKeys(std::uint32_t noOfBits, PrimeMethod method = PrimeMethod::millerRabin,
+                                   uint64_t s = defaultMillerRabinRounds,
+                                   const std::string& publicKeyPath = "pubkey.txt",
+                                   const std::string& privateKeyPath = "privkey.txt")
 {
-    const KeyPair keys = generateKeys(noOfBits);
-    saveKey("pubkey.txt", keys.publicKey);
-    saveKey("privkey.txt", keys.privateKey);
+    const KeyPair keys = generateKeys(noOfBits, method, s);
+    saveKey(publicKeyPath, keys.publicKey);
+    saveKey(privateKeyPath, keys.privateKey);
     return keys;
 }

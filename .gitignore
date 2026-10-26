@@ -32,6 +32,8 @@
 __history/
 __recovery/
 __pycache__/
+.venv/
+.ipynb_checkpoints/
 
 # build and backup folders
 /_build*

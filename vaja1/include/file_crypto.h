@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <string>
 
@@ -11,12 +12,16 @@
 // Bits stored at the start of an encrypted file for the original file size in bytes
 inline constexpr unsigned fileSizeBits = 64;
 
+// Called with the finished fraction (0 to 1) after each block, for showing progress
+using ProgressCallback = std::function<void(double)>;
+
 /**
  * @details The file is read in blocks of floor(log2 n) bits, so every block is smaller than n.
  * Each encrypted block can be anything up to n - 1, so it is written with one bit more.
  * The original size is stored first, so decryption knows where the padding of the last block starts.
  */
-inline bool encryptFile(const std::string& inputPath, const std::string& outputPath, const Key& publicKey)
+inline bool encryptFile(const std::string& inputPath, const std::string& outputPath, const Key& publicKey,
+                        const ProgressCallback& onProgress = {})
 {
     std::ifstream input(inputPath, std::ios::binary | std::ios::ate);
     if (!input) {
@@ -45,12 +50,15 @@ inline bool encryptFile(const std::string& inputPath, const std::string& outputP
         const cpp_int message = reader.read(bits) << (blockBits - bits);
 
         writer.write(modularExponentiation(message, publicKey.exponent, publicKey.modulus), blockBits + 1);
+        if (onProgress)
+            onProgress(static_cast<double>(done + bits) / static_cast<double>(totalBits));
     }
     writer.flush();
     return true;
 }
 
-inline bool decryptFile(const std::string& inputPath, const std::string& outputPath, const Key& privateKey)
+inline bool decryptFile(const std::string& inputPath, const std::string& outputPath, const Key& privateKey,
+                        const ProgressCallback& onProgress = {})
 {
     std::ifstream input(inputPath, std::ios::binary);
     if (!input) {
@@ -86,6 +94,8 @@ inline bool decryptFile(const std::string& inputPath, const std::string& outputP
         // Drops the zero padding that was added to the last block
         const auto bits = static_cast<unsigned>(std::min<uint64_t>(blockBits, totalBits - done));
         writer.write(message >> (blockBits - bits), bits);
+        if (onProgress)
+            onProgress(static_cast<double>(done + bits) / static_cast<double>(totalBits));
     }
     writer.flush();
     return true;
