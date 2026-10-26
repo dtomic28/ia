@@ -1,10 +1,8 @@
 #pragma once
 
-#include <fstream>
-#include <iostream>
 #include <optional>
-#include <string>
 
+#include "io_utils.h"
 #include "prime_generators.h"
 
 // Finds gcd and coefficients such that first * coefFirst + second * coefSecond = gcd.
@@ -48,18 +46,13 @@ inline std::optional<cpp_int> modularLinearEquationSolver(const cpp_int& factor,
     return positiveMod(coefFactor * (target / gcd), modulus);
 }
 
-// Writes a key as two lines: exponent, then modulus
-inline void saveKey(const std::string& path, const cpp_int& exponent, const cpp_int& modulus)
+struct KeyPair
 {
-    std::ofstream file(path);
-    if (!file) {
-        std::cerr << "Could not open " << path << "\n";
-        return;
-    }
-    file << exponent << "\n" << modulus << "\n";
-}
+    Key publicKey;
+    Key privateKey;
+};
 
-inline void generateKeys(std::uint32_t noOfBits)
+inline KeyPair generateKeys(std::uint32_t noOfBits)
 {
     auto p  = generatePrimeMillerRabin(noOfBits);
     cpp_int q;
@@ -84,6 +77,13 @@ inline void generateKeys(std::uint32_t noOfBits)
 
     const cpp_int d{modularLinearEquationSolver(e, 1, phi).value()};
 
-    saveKey("pubkey.txt", e, n);
-    saveKey("privkey.txt", d, n);
+    return {{e, n}, {d, n}};
+}
+
+inline KeyPair generateAndSaveKeys(std::uint32_t noOfBits)
+{
+    const KeyPair keys = generateKeys(noOfBits);
+    saveKey("pubkey.txt", keys.publicKey);
+    saveKey("privkey.txt", keys.privateKey);
+    return keys;
 }
