@@ -1,7 +1,8 @@
 #pragma once
 
-#include <cmath>
 #include <cstdint>
+
+#include <boost/multiprecision/cpp_int.hpp>
 
 #include "lcg.h"
 #include "bin_helpers.h"
@@ -9,15 +10,32 @@
 inline LCG SuperDuper{1ull << 32, 69069, 1, 0};
 
 inline constexpr uint64_t defaultMillerRabinRounds = 20;
+inline constexpr unsigned maxPrimeBits = 2048;
 
-inline bool isPrimeNaive(uint64_t p) {
+/**
+ * @details Super-Duper only gives 32 bits per step, so enough steps are glued together to cover the range.
+ * For ranges up to 32 bits this uses a single step, same as LCG::getRandom.
+ */
+inline uint2048_t getRandomBig(LCG& lcg, const uint2048_t& low, const uint2048_t& high) {
+    const uint2048_t range = high - low + 1;    // wraps to 0 when the range covers all 2048 bits
+    const unsigned bits = range == 0 ? 2048 : msb(range) + 1;
+
+    uint2048_t r = 0;
+    for (unsigned i = 0; i < bits; i += 32)
+        r = (r << 32) | (lcg.calculateNextR() & 0xFFFFFFFF);
+
+    return range == 0 ? low + r : low + r % range;
+}
+
+inline bool isPrimeNaive(const uint2048_t& p) {
     if (p < 2)
         return false;
     if (p % 2 == 0)
         return p == 2;
 
-    uint64_t j = 3;
-    while (j <= std::sqrt(p)) {
+    const uint2048_t limit = sqrt(p);
+    uint2048_t j = 3;
+    while (j <= limit) {
         if (p % j == 0)
             return false;
         j += 2;
@@ -25,8 +43,8 @@ inline bool isPrimeNaive(uint64_t p) {
     return true;
 }
 
-inline uint64_t generatePrimeNaive(uint8_t numOfBits) {
-    uint64_t p = SuperDuper.getRandom(minNBit(numOfBits), maxNBit(numOfBits));
+inline uint2048_t generatePrimeNaive(unsigned numOfBits) {
+    uint2048_t p = getRandomBig(SuperDuper, minNBit(numOfBits), maxNBit(numOfBits));
     if (p % 2 == 0)
         p++;
 
@@ -35,12 +53,20 @@ inline uint64_t generatePrimeNaive(uint8_t numOfBits) {
     return p;
 }
 
-inline uint64_t modularExponentiation(uint64_t base, uint64_t exponent, uint64_t modulus) {
-    uint64_t result = 1;
-    for (int bit = 63; bit >= 0; bit--) {
-        result = (result * result) % modulus;
-        if ((exponent >> bit) & 1)
-            result = (result * base) % modulus;
+// The product of two 2048-bit numbers needs up to 4096 bits before the modulo
+inline uint2048_t multiplyModulo(const uint2048_t& a, const uint2048_t& b, const uint2048_t& modulus) {
+    return static_cast<uint2048_t>(uint4096_t(a) * uint4096_t(b) % uint4096_t(modulus));
+}
+
+inline uint2048_t modularExponentiation(const uint2048_t& base, const uint2048_t& exponent, const uint2048_t& modulus) {
+    uint2048_t result = 1;
+    if (exponent == 0)
+        return result;
+
+    for (int bit = static_cast<int>(msb(exponent)); bit >= 0; bit--) {
+        result = multiplyModulo(result, result, modulus);
+        if (bit_test(exponent, bit))
+            result = multiplyModulo(result, base, modulus);
     }
     return result;
 }
@@ -57,14 +83,14 @@ enum class MRResult {
  * @param s - number of iterations
  * @return
  */
-inline MRResult millerRabinTest(uint64_t p, uint64_t s = defaultMillerRabinRounds) {
+inline MRResult millerRabinTest(const uint2048_t& p, uint64_t s = defaultMillerRabinRounds) {
     if (p <= 3)
         return MRResult::prime;
 
     if (p % 2 == 0)
         return MRResult::composite;
 
-    uint64_t d = p - 1;
+    uint2048_t d = p - 1;
     uint64_t k = 0;
     while (d % 2 == 0) {
         d /= 2;
@@ -72,8 +98,8 @@ inline MRResult millerRabinTest(uint64_t p, uint64_t s = defaultMillerRabinRound
     }
 
     for (uint64_t j = 1; j <= s; j++) {
-        uint64_t a = SuperDuper.getRandom(2, p - 2);
-        uint64_t x = modularExponentiation(a, d, p);
+        uint2048_t a = getRandomBig(SuperDuper, 2, p - 2);
+        uint2048_t x = modularExponentiation(a, d, p);
 
         if (x == 1)
             continue;
@@ -81,7 +107,7 @@ inline MRResult millerRabinTest(uint64_t p, uint64_t s = defaultMillerRabinRound
         for (uint64_t i = 0; i < k; i++) {
             if (x == p-1)
                 break;
-            x = (x * x) % p;
+            x = multiplyModulo(x, x, p);
         }
 
         if (x != p-1)
@@ -91,8 +117,8 @@ inline MRResult millerRabinTest(uint64_t p, uint64_t s = defaultMillerRabinRound
     return MRResult::probablyPrime;
 }
 
-inline uint64_t generatePrimeMillerRabin(uint8_t numOfBits, uint64_t s = defaultMillerRabinRounds) {
-    uint64_t p = SuperDuper.getRandom(minNBit(numOfBits), maxNBit(numOfBits));
+inline uint2048_t generatePrimeMillerRabin(unsigned numOfBits, uint64_t s = defaultMillerRabinRounds) {
+    uint2048_t p = getRandomBig(SuperDuper, minNBit(numOfBits), maxNBit(numOfBits));
     if (p % 2 == 0)
         p++;
 

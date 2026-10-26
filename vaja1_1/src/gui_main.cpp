@@ -1,6 +1,8 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -101,10 +103,14 @@ static void drawPlots(const GeneratorSettings& s, const std::vector<double>& val
     }
 }
 
+inline constexpr unsigned naiveMaxBits = 32;
+
 struct GeneratedPrime {
     const char* method;
     int bits;
-    uint64_t prime;
+    // Converting 2048-bit numbers every frame is slow, so the text is made once
+    std::string decimal;
+    std::string binary;
     double microseconds;
 };
 
@@ -114,9 +120,10 @@ struct PrimeState {
     uint64_t seed{0};
     std::vector<GeneratedPrime> generated;
 
-    uint64_t testNumber{97};
+    char testNumber[700]{"97"};    // 2048 bits is 617 decimal digits
     bool tested{false};
-    uint64_t testedNumber{0};
+    uint2048_t testedNumber{0};
+    bool naiveTested{false};
     bool naiveResult{false};
     MRResult millerRabinResult{MRResult::composite};
     double naiveMicroseconds{0};
@@ -131,15 +138,27 @@ static double measureMicroseconds(Function&& function) {
     return std::chrono::duration<double, std::micro>(end - start).count();
 }
 
-static std::string toBinary(uint64_t value) {
+static std::string toBinary(const uint2048_t& value) {
     if (value == 0)
         return "0";
     std::string binary;
-    while (value > 0) {
-        binary.insert(binary.begin(), static_cast<char>('0' + (value & 1)));
-        value >>= 1;
-    }
+    for (int bit = static_cast<int>(msb(value)); bit >= 0; bit--)
+        binary += bit_test(value, bit) ? '1' : '0';
     return binary;
+}
+
+// Parses a non-negative decimal number, fails if it doesn't fit in 2048 bits
+static std::optional<uint2048_t> parseBig(const char* text) {
+    if (*text == '\0' || std::strspn(text, "0123456789") != std::strlen(text))
+        return std::nullopt;
+    const boost::multiprecision::cpp_int value(text);
+    if (value > maxNBit(maxPrimeBits))
+        return std::nullopt;
+    return static_cast<uint2048_t>(value);
+}
+
+static void addGenerated(PrimeState& state, const char* method, const uint2048_t& prime, double microseconds) {
+    state.generated.push_back({method, state.bits, prime.str(), toBinary(prime), microseconds});
 }
 
 static const char* toString(MRResult result) {
@@ -167,49 +186,57 @@ static void drawPrimeControls(PrimeState& state) {
         state.s = 1;
 
     ImGui::SeparatorText("Generate prime");
-    ImGui::SliderInt("bits", &state.bits, 2, 32, "%d", ImGuiSliderFlags_AlwaysClamp);
-    ImGui::TextDisabled("range: [%llu, %llu]",
-                        static_cast<unsigned long long>(minNBit(state.bits)),
-                        static_cast<unsigned long long>(maxNBit(state.bits)));
+    ImGui::SliderInt("bits", &state.bits, 2, maxPrimeBits, "%d",
+                     ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+    ImGui::TextDisabled("range: [2^%d, 2^%d - 1]", state.bits - 1, state.bits);
 
-    const auto bits = static_cast<uint8_t>(state.bits);
+    const auto bits = static_cast<unsigned>(state.bits);
+    // Trial division is hopeless past 32 bits
+    ImGui::BeginDisabled(bits > naiveMaxBits);
     if (ImGui::Button("Naive")) {
-        uint64_t prime = 0;
+        uint2048_t prime = 0;
         const double time = measureMicroseconds([&] { prime = generatePrimeNaive(bits); });
-        state.generated.push_back({"naive", state.bits, prime, time});
+        addGenerated(state, "naive", prime, time);
     }
+    ImGui::EndDisabled();
+    ImGui::SetItemTooltip("Only up to %u bits", naiveMaxBits);
     ImGui::SameLine();
     if (ImGui::Button("Miller-Rabin")) {
-        uint64_t prime = 0;
+        uint2048_t prime = 0;
         const double time = measureMicroseconds([&] { prime = generatePrimeMillerRabin(bits, state.s); });
-        state.generated.push_back({"Miller-Rabin", state.bits, prime, time});
+        addGenerated(state, "Miller-Rabin", prime, time);
     }
     ImGui::SameLine();
     if (ImGui::Button("Clear"))
         state.generated.clear();
 
     ImGui::SeparatorText("Test number");
-    ImGui::InputScalar("number", ImGuiDataType_U64, &state.testNumber);
+    ImGui::InputTextMultiline("number", state.testNumber, sizeof(state.testNumber), {0, 60},
+                              ImGuiInputTextFlags_CharsDecimal);
 
-    const bool valid = state.testNumber <= maxNBit(32);
-    if (!valid)
-        ImGui::TextColored({1.0f, 0.4f, 0.4f, 1.0f}, "number must fit in 32 bits");
+    const std::optional<uint2048_t> number = parseBig(state.testNumber);
+    if (!number)
+        ImGui::TextColored({1.0f, 0.4f, 0.4f, 1.0f}, "number must be a decimal that fits in %u bits", maxPrimeBits);
 
-    ImGui::BeginDisabled(!valid);
+    ImGui::BeginDisabled(!number);
     if (ImGui::Button("Test with both methods")) {
         state.tested = true;
-        state.testedNumber = state.testNumber;
-        state.naiveMicroseconds = measureMicroseconds([&] { state.naiveResult = isPrimeNaive(state.testNumber); });
+        state.testedNumber = *number;
+        state.naiveTested = state.testedNumber <= maxNBit(naiveMaxBits);
+        if (state.naiveTested)
+            state.naiveMicroseconds = measureMicroseconds([&] { state.naiveResult = isPrimeNaive(state.testedNumber); });
         state.millerRabinMicroseconds = measureMicroseconds([&] {
-            state.millerRabinResult = millerRabinTest(state.testNumber, state.s);
+            state.millerRabinResult = millerRabinTest(state.testedNumber, state.s);
         });
     }
     ImGui::EndDisabled();
 
     if (state.tested) {
-        ImGui::Text("%llu = %s", static_cast<unsigned long long>(state.testedNumber),
-                    toBinary(state.testedNumber).c_str());
-        ImGui::Text("naive:        %s (%.2f us)", state.naiveResult ? "prime" : "composite", state.naiveMicroseconds);
+        ImGui::TextWrapped("%s = %s", state.testedNumber.str().c_str(), toBinary(state.testedNumber).c_str());
+        if (state.naiveTested)
+            ImGui::Text("naive:        %s (%.2f us)", state.naiveResult ? "prime" : "composite", state.naiveMicroseconds);
+        else
+            ImGui::Text("naive:        skipped, more than %u bits", naiveMaxBits);
         ImGui::Text("Miller-Rabin: %s (%.2f us)", toString(state.millerRabinResult), state.millerRabinMicroseconds);
     }
 }
@@ -218,11 +245,11 @@ static void drawGeneratedPrimes(const PrimeState& state) {
     ImGui::SeparatorText("Generated primes");
     if (ImGui::BeginTable("primes", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
                           {0, -FLT_MIN})) {
-        ImGui::TableSetupColumn("method");
-        ImGui::TableSetupColumn("bits");
-        ImGui::TableSetupColumn("prime");
-        ImGui::TableSetupColumn("binary");
-        ImGui::TableSetupColumn("time [us]");
+        ImGui::TableSetupColumn("method", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("bits", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("prime", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("binary", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("time [us]", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
 
@@ -234,9 +261,9 @@ static void drawGeneratedPrimes(const PrimeState& state) {
             ImGui::TableNextColumn();
             ImGui::Text("%d", it->bits);
             ImGui::TableNextColumn();
-            ImGui::Text("%llu", static_cast<unsigned long long>(it->prime));
+            ImGui::TextWrapped("%s", it->decimal.c_str());
             ImGui::TableNextColumn();
-            ImGui::TextUnformatted(toBinary(it->prime).c_str());
+            ImGui::TextWrapped("%s", it->binary.c_str());
             ImGui::TableNextColumn();
             ImGui::Text("%.2f", it->microseconds);
         }
@@ -251,8 +278,19 @@ int main() {
     if (!glfwInit())
         return 1;
 
+#if defined(__APPLE__)
+    // macOS only offers GL 3.2+ as a forward-compatible core profile
+    const char* glslVersion = "#version 150";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+#else
+    const char* glslVersion = "#version 130";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+#endif
+
     GLFWwindow* window = glfwCreateWindow(1280, 800, "vaja1_1 - LCG & primes", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
@@ -267,8 +305,7 @@ int main() {
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 130");
-
+    ImGui_ImplOpenGL3_Init(glslVersion);
     GeneratorSettings settings;
     std::vector<double> values = generate(settings);
     PrimeState primeState;

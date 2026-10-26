@@ -37,8 +37,10 @@ int main(int argc, char* argv[]) {
     }
 
     const auto [bits, s, repetitions, seed] = args;
-    if (bits < 2 || bits > 32) {
-        std::cerr << "bits must be between 2 and 32\n";
+    // Trial division is hopeless past 32 bits, Miller-Rabin goes up to the full cpp_int width
+    const uint64_t maxBits = method == "naive" ? 32 : maxPrimeBits;
+    if (bits < 2 || bits > maxBits) {
+        std::cerr << "bits must be between 2 and " << maxBits << " for " << method << "\n";
         return 1;
     }
     if (s < 1 || repetitions < 1) {
@@ -48,14 +50,13 @@ int main(int argc, char* argv[]) {
 
     SuperDuper = LCG{1ull << 32, 69069, 1, seed};
 
-    // Summing the primes keeps the compiler from optimizing the generation away
+    // Summing the low 64 bits of the primes keeps the compiler from optimizing the generation away
     volatile uint64_t checksum = 0;
     const auto start = std::chrono::steady_clock::now();
     for (uint64_t i = 0; i < repetitions; i++) {
-        if (method == "naive")
-            checksum = checksum + generatePrimeNaive(static_cast<uint8_t>(bits));
-        else
-            checksum = checksum + generatePrimeMillerRabin(static_cast<uint8_t>(bits), s);
+        const uint2048_t prime = method == "naive" ? generatePrimeNaive(static_cast<unsigned>(bits))
+                                                   : generatePrimeMillerRabin(static_cast<unsigned>(bits), s);
+        checksum = checksum + static_cast<uint64_t>(prime & UINT64_MAX);
     }
     const auto end = std::chrono::steady_clock::now();
 
