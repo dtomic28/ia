@@ -122,7 +122,7 @@ struct PrimeState {
 
     char testNumber[700]{"97"};    // 2048 bits is 617 decimal digits
     bool tested{false};
-    uint2048_t testedNumber{0};
+    cpp_int testedNumber{0};
     bool naiveTested{false};
     bool naiveResult{false};
     MRResult millerRabinResult{MRResult::composite};
@@ -138,7 +138,7 @@ static double measureMicroseconds(Function&& function) {
     return std::chrono::duration<double, std::micro>(end - start).count();
 }
 
-static std::string toBinary(const uint2048_t& value) {
+static std::string toBinary(const cpp_int& value) {
     if (value == 0)
         return "0";
     std::string binary;
@@ -148,16 +148,16 @@ static std::string toBinary(const uint2048_t& value) {
 }
 
 // Parses a non-negative decimal number, fails if it doesn't fit in 2048 bits
-static std::optional<uint2048_t> parseBig(const char* text) {
+static std::optional<cpp_int> parseBig(const char* text) {
     if (*text == '\0' || std::strspn(text, "0123456789") != std::strlen(text))
         return std::nullopt;
-    const boost::multiprecision::cpp_int value(text);
+    const cpp_int value(text);
     if (value > maxNBit(maxPrimeBits))
         return std::nullopt;
-    return static_cast<uint2048_t>(value);
+    return value;
 }
 
-static void addGenerated(PrimeState& state, const char* method, const uint2048_t& prime, double microseconds) {
+static void addGenerated(PrimeState& state, const char* method, const cpp_int& prime, double microseconds) {
     state.generated.push_back({method, state.bits, prime.str(), toBinary(prime), microseconds});
 }
 
@@ -194,7 +194,7 @@ static void drawPrimeControls(PrimeState& state) {
     // Trial division is hopeless past 32 bits
     ImGui::BeginDisabled(bits > naiveMaxBits);
     if (ImGui::Button("Naive")) {
-        uint2048_t prime = 0;
+        cpp_int prime = 0;
         const double time = measureMicroseconds([&] { prime = generatePrimeNaive(bits); });
         addGenerated(state, "naive", prime, time);
     }
@@ -202,7 +202,7 @@ static void drawPrimeControls(PrimeState& state) {
     ImGui::SetItemTooltip("Only up to %u bits", naiveMaxBits);
     ImGui::SameLine();
     if (ImGui::Button("Miller-Rabin")) {
-        uint2048_t prime = 0;
+        cpp_int prime = 0;
         const double time = measureMicroseconds([&] { prime = generatePrimeMillerRabin(bits, state.s); });
         addGenerated(state, "Miller-Rabin", prime, time);
     }
@@ -214,7 +214,7 @@ static void drawPrimeControls(PrimeState& state) {
     ImGui::InputTextMultiline("number", state.testNumber, sizeof(state.testNumber), {0, 60},
                               ImGuiInputTextFlags_CharsDecimal);
 
-    const std::optional<uint2048_t> number = parseBig(state.testNumber);
+    const std::optional<cpp_int> number = parseBig(state.testNumber);
     if (!number)
         ImGui::TextColored({1.0f, 0.4f, 0.4f, 1.0f}, "number must be a decimal that fits in %u bits", maxPrimeBits);
 

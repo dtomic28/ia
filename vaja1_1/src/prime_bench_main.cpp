@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
     volatile uint64_t checksum = 0;
     const auto start = std::chrono::steady_clock::now();
     for (uint64_t i = 0; i < repetitions; i++) {
-        const uint2048_t prime = method == "naive" ? generatePrimeNaive(static_cast<unsigned>(bits))
+        const cpp_int prime = method == "naive" ? generatePrimeNaive(static_cast<unsigned>(bits))
                                                    : generatePrimeMillerRabin(static_cast<unsigned>(bits), s);
         checksum = checksum + static_cast<uint64_t>(prime & UINT64_MAX);
     }
