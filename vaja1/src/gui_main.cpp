@@ -351,11 +351,10 @@ static bool isRunning(const RsaState& state) {
     return state.job.valid() && state.job.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
 }
 
-template <typename Function>
-static void startJob(RsaState& state, const char* name, bool reportsProgress, Function&& function) {
+static void startJob(RsaState& state, const char* name, bool reportsProgress, std::function<void()> function) {
     state.jobName = name;
     state.progress = reportsProgress ? 0.0 : -1.0;
-    state.job = std::async(std::launch::async, std::forward<Function>(function));
+    state.job = std::async(std::launch::async, std::move(function));
 }
 
 static std::string absolutePath(const std::string& path) {
