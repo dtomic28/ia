@@ -5,6 +5,9 @@ set(GLOBAL_PROJECT_NAME "IzbraniAlgoritmi")
 
 project(${GLOBAL_PROJECT_NAME})
 
+# Tells the assignments that the shared setup below is already done, so they don't repeat it
+set(IA_ROOT_BUILD TRUE)
+
 # Lets each assignment group its targets with the FOLDER property
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 

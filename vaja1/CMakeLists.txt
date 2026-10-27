@@ -1,10 +1,47 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
 
 set(ASSIGNMENT_NAME "vaja1")
 
+if(NOT IA_ROOT_BUILD)
+    set(CMAKE_CXX_STANDARD 20)
+endif()
+
 project(${ASSIGNMENT_NAME})
 
-include_directories(${CMAKE_SOURCE_DIR}/${ASSIGNMENT_NAME}/include)
+include(FetchContent)
+
+# Built on its own (not from the root CMakeLists.txt), so the shared setup has to be done here
+if(NOT IA_ROOT_BUILD)
+    set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+    # Link the MinGW runtime statically, otherwise a different libstdc++-6.dll on PATH can be loaded at runtime.
+    # libwinpthread can't be linked statically with this toolchain, so its DLL is copied next to the executables instead.
+    if(MINGW)
+        add_link_options(-static-libgcc -static-libstdc++)
+        get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+        set(MINGW_RUNTIME_DLLS "${MINGW_BIN_DIR}/libwinpthread-1.dll")
+    endif()
+
+    # Boost.Multiprecision (cpp_int) in standalone mode, so the rest of Boost isn't needed.
+    # Standalone mode still requires the header-only Boost.Config.
+    FetchContent_Declare(boost_config
+        GIT_REPOSITORY https://github.com/boostorg/config.git
+        GIT_TAG        boost-1.92.0
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_Declare(boost_multiprecision
+        GIT_REPOSITORY https://github.com/boostorg/multiprecision.git
+        GIT_TAG        boost-1.92.0
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(boost_config boost_multiprecision)
+    target_link_libraries(boost_multiprecision INTERFACE Boost::config)
+
+    # Linked to every target added after this point
+    link_libraries(Boost::multiprecision)
+endif()
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if(MINGW_RUNTIME_DLLS)
     file(COPY ${MINGW_RUNTIME_DLLS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
@@ -38,8 +75,6 @@ if(GMP_FOUND)
         add_gmp_executable(${ASSIGNMENT_NAME}_${bench} src/${bench}_main.cpp)
     endforeach()
 endif()
-
-include(FetchContent)
 
 set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)

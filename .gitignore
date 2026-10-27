@@ -39,7 +39,7 @@ __pycache__/
 /_build*
 /build*
 /build_win
-/cmake-build*
+cmake-build*/
 /out*
 bckp
 
