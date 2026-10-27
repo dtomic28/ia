@@ -15,6 +15,30 @@ add_executable(${ASSIGNMENT_NAME}_lcg_test src/lcg_test_main.cpp)
 add_executable(${ASSIGNMENT_NAME}_prime_bench src/prime_bench_main.cpp)
 add_executable(${ASSIGNMENT_NAME}_keygen_bench src/keygen_bench_main.cpp)
 
+# Same programs on the GMP backend, built only when GMP is installed
+find_path(GMP_INCLUDE_DIR gmp.h HINTS /opt/homebrew/include /usr/local/include)
+find_library(GMP_LIBRARY gmp HINTS /opt/homebrew/lib /usr/local/lib)
+if(GMP_INCLUDE_DIR AND GMP_LIBRARY)
+    set(GMP_FOUND TRUE)
+else()
+    message(STATUS "GMP not found, skipping the GMP programs")
+endif()
+
+# Adds <name>_gmp built from the same source as <name>, with cpp_int switched to GMP
+function(add_gmp_executable name source)
+    add_executable(${name}_gmp ${source})
+    target_compile_definitions(${name}_gmp PRIVATE USE_GMP)
+    target_include_directories(${name}_gmp PRIVATE ${GMP_INCLUDE_DIR})
+    target_link_libraries(${name}_gmp PRIVATE ${GMP_LIBRARY})
+    set_target_properties(${name}_gmp PROPERTIES FOLDER ${ASSIGNMENT_NAME})
+endfunction()
+
+if(GMP_FOUND)
+    foreach(bench prime_bench keygen_bench)
+        add_gmp_executable(${ASSIGNMENT_NAME}_${bench} src/${bench}_main.cpp)
+    endforeach()
+endif()
+
 include(FetchContent)
 
 set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
@@ -70,6 +94,11 @@ target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
 
 add_executable(${ASSIGNMENT_NAME}_gui src/gui_main.cpp)
 target_link_libraries(${ASSIGNMENT_NAME}_gui PRIVATE imgui nfd)
+
+if(GMP_FOUND)
+    add_gmp_executable(${ASSIGNMENT_NAME}_gui src/gui_main.cpp)
+    target_link_libraries(${ASSIGNMENT_NAME}_gui_gmp PRIVATE imgui nfd)
+endif()
 
 set_target_properties(
     ${ASSIGNMENT_NAME}_cli

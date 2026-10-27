@@ -2,8 +2,6 @@
 
 #include <cstdint>
 
-#include <boost/multiprecision/cpp_int.hpp>
-
 #include "lcg.h"
 #include "bin_helpers.h"
 
