@@ -17,8 +17,8 @@ public:
     }
 
 private:
-    uint64_t m{0};
-    uint64_t a{0};
-    uint64_t b{0};
-    uint64_t r{0};
+    uint64_t m{0}; //Modulus
+    uint64_t a{0}; //Multiplier
+    uint64_t b{0}; //Incrament
+    uint64_t r{0}; //Seed/State
 };
